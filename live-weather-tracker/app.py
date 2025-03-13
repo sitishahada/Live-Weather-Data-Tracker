@@ -27,7 +27,10 @@ DB_POOL = pool.SimpleConnectionPool(
 )
 
 # OpenWeather API details
-API_KEY = "4ad5e3fe447e40f481024727240107"
+from dotenv import load_dotenv
+
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 CITIES = ["Shah Alam, MY", "Kuala Lumpur, MY", "Singapore, SG"]
 
 # Get a database connection from the pool
