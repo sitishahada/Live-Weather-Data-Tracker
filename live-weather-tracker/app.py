@@ -5,13 +5,11 @@ from psycopg2 import pool
 import requests
 import time
 from flask_cors import CORS
-from fastapi import FastAPI
 from psycopg2.extras import RealDictCursor
 import os
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app, resources={r"/*": {"origins": "*"}})  # ✅ Allows all requests, including DELETE
 
 print(app.url_map) 
 
@@ -85,10 +83,7 @@ def get_weather():
 # Add weather data to PostgreSQL
 @app.route('/add', methods=['POST'])
 def add_weather():
-    weather = fetch_weather()
-    if not weather:
-        return jsonify({"error": "Failed to fetch weather data"}), 500
-
+   
     conn = get_db_connection()
     cur = conn.cursor()
     weather_entries = []
@@ -120,8 +115,14 @@ def add_weather():
         release_db_connection(conn)
 
 # Delete weather data from PostgreSQL
-@app.route('/delete/<int:weather_id>', methods=['DELETE'])
+@app.route('/delete/<int:weather_id>', methods=['OPTIONS', 'DELETE'])
 def delete_weather(weather_id):
+    if request.method == "OPTIONS":
+        # Handle CORS preflight request
+        response = jsonify({"message": "CORS preflight OK"})
+        response.headers.add("Access-Control-Allow-Methods", "DELETE")
+        return response, 200
+    
     conn = get_db_connection()
     cur = conn.cursor()
     try:
@@ -131,15 +132,17 @@ def delete_weather(weather_id):
 
         if deleted_id:
             socketio.emit("weather_delete", {"id": weather_id})
-            return jsonify({"message": "Weather data deleted"})
-        return jsonify({"error": "Weather data not found"}), 404
+            return jsonify({"message": "Weather data deleted"}), 200
+        else:
+            return jsonify({"error": "Weather data not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         cur.close()
-        release_db_connection(conn)  # ✅ Release back to the pool
+        conn.close()
 
-app = FastAPI()
+
+
 # API to get distinct cities
 @app.get("/api/cities")
 def get_cities():
@@ -175,8 +178,9 @@ def update_weather_periodically():
 
         cur.close()
         conn.close()
+        
+        time.sleep(600)  # Fetch every 10 minutes (600 seconds)
 
-        time.sleep(600)  # Update every 60 seconds
 
 
 if __name__ == '__main__':
